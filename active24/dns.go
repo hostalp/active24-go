@@ -50,7 +50,7 @@ const (
 // Dns provides a way to interact with DNS domains
 type Dns interface {
 	// With returns interface to interact with DNS records in given service ID (domain)
-	With(domain string, serviceID int) DnsRecordActions
+	With(serviceID int) DnsRecordActions
 }
 
 type DnsRecord struct {
@@ -93,17 +93,15 @@ type dns struct {
 	h helper
 }
 
-func (d *dns) With(domain string, serviceID int) DnsRecordActions {
+func (d *dns) With(serviceID int) DnsRecordActions {
 	return &domainAction{
 		h:     d.h,
-		dom:   domain,
 		svcID: serviceID,
 	}
 }
 
 type domainAction struct {
 	h     helper
-	dom   string
 	svcID int
 }
 
@@ -112,25 +110,23 @@ func (d *domainAction) ListAll() ([]DnsRecord, ApiError) {
 }
 
 func (d *domainAction) List(recType DnsRecordType, recName string) ([]DnsRecord, ApiError) {
-	// Get first page
-	allRecords, nextPageUrl, nextPage, err := d.ListPage(recType, recName, "", 0)
-	if err != nil {
-		return nil, err
-	}
+	var allRecords []DnsRecord
+	var nextPageUrl string
+	var nextPage int
+	var err ApiError
 
-	// Keep getting next pages while we have either nextPageUrl or nextPage
 	pageCount := 1
-	for (nextPageUrl != "" || nextPage > 0) && pageCount < d.h.maxPages {
-		pageCount++
+	for (pageCount == 1 || nextPageUrl != "" || nextPage > 0) && pageCount <= d.h.maxPages {
 		var pageRecords []DnsRecord
 		pageRecords, nextPageUrl, nextPage, err = d.ListPage(recType, recName, nextPageUrl, nextPage)
 		if err != nil {
 			return nil, err
 		}
 		allRecords = append(allRecords, pageRecords...)
+		pageCount++
 	}
-	if pageCount >= d.h.maxPages {
-		return nil, apiErr(nil, fmt.Errorf("maximum page limit reached in List, maxPages: %d, increase the limit in the configuration", d.h.maxPages))
+	if pageCount > d.h.maxPages && (nextPageUrl != "" || nextPage > d.h.maxPages) {
+		return allRecords, apiErr(nil, fmt.Errorf("maximum page limit reached in List, partial result returned, maxPages: %d, increase the limit in the configuration", d.h.maxPages))
 	}
 	return allRecords, nil
 }

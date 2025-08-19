@@ -18,7 +18,7 @@ func main() {
 	ipAddress := "1.2.3.4"
 	ttl := 600
 
-	_, err := client.Dns().With("example.com", 12345678).Create(&active24.DnsRecord{
+	_, err := client.Dns().With(12345678).Create(&active24.DnsRecord{
 		Type:    &recordType,
 		Name:    hostName;
 		Content: &ipAddress,
@@ -29,4 +29,3 @@ func main() {
 	}
 }
 ```
-

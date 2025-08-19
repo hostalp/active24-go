@@ -23,12 +23,12 @@ import (
 )
 
 func main() {
-	client := active24.New("ak48l3h7-ak5d-qn4t-p8gc-b6fs8c3l", "ajvkeo3y82ndsu2smvxy3o36496dcascksldncsq", active24.ApiEndpoint("https://sandboxapi.active24.com"))
+	client := active24.New("ak48l3h7-ak5d-qn4t-p8gc-b6fs8c3l", "ajvkeo3y82ndsu2smvxy3o36496dcascksldncsq", active24.ApiEndpoint("https://rest.active24.cz"))
 
 	dns := client.Dns()
 
-	//list DNS records in domain example.com
-	recs, err := dns.With("example.com", 12345678).ListAll()
+	//list DNS records in domain with ServiceID 12345678
+	recs, err := dns.With(12345678).ListAll()
 	if err != nil {
 		panic(err)
 	}
@@ -42,7 +42,7 @@ func main() {
 	alias := "host.example.com"
 	ttl := 600
 
-	err = dns.With("example.com", 12345678).Create(&active24.DnsRecord{
+	err = dns.With(12345678).Create(&active24.DnsRecord{
 		Type:    &recordType,
 		Name:    hostName,
 		Content: &alias,
