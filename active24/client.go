@@ -17,15 +17,17 @@ limitations under the License.
 package active24
 
 import (
+	"crypto/hmac"
+	"crypto/sha1"
+	"encoding/hex"
 	"fmt"
 	"io"
-	"k8s.io/klog/v2"
 	"net/http"
+	"net/url"
+	"path"
 	"time"
-)
 
-const (
-	SandboxToken = "123456qwerty-ok"
+	"k8s.io/klog/v2"
 )
 
 type Option func(c *client)
@@ -50,19 +52,19 @@ type ApiError interface {
 type Client interface {
 	// Dns provides interface to interact with DNS records
 	Dns() Dns
-	// Domains provides interface to interact with domains
-	Domains() Domains
 }
 
-func New(apiKey string, opts ...Option) Client {
+func New(apiKey string, apiSecret string, opts ...Option) Client {
 	c := &client{
 		h: helper{
-			apiEndpoint: "https://api.active24.com",
-			auth:        apiKey,
+			apiEndpoint: "https://rest.active24.cz",
+			authKey:     apiKey,
+			authSecret:  apiSecret,
 			c: http.Client{
 				Timeout: time.Second * 10,
 			},
-			l: klog.NewKlogr(),
+			l:        klog.NewKlogr(),
+			maxPages: 100, // default max pages to prevent infinite loops
 		},
 	}
 	for _, opt := range opts {
@@ -77,12 +79,6 @@ type client struct {
 
 func (c *client) Dns() Dns {
 	return &dns{
-		h: c.h,
-	}
-}
-
-func (c *client) Domains() Domains {
-	return &domains{
 		h: c.h,
 	}
 }
@@ -102,21 +98,57 @@ func (a *apiError) Response() *http.Response {
 
 type helper struct {
 	apiEndpoint string
-	auth        string
+	authKey     string
+	authSecret  string
 	c           http.Client
 	l           klog.Logger
+	maxPages    int
 }
 
-func (ch *helper) do(method string, suffix string, body io.Reader) (*http.Response, error) {
-	r, err := http.NewRequest(method, fmt.Sprintf("%s/%s", ch.apiEndpoint, suffix), body)
+func (ch *helper) getSignature(message, key string) string {
+	h := hmac.New(sha1.New, []byte(key))
+	h.Write([]byte(message))
+	return hex.EncodeToString(h.Sum(nil))
+}
+
+func (ch *helper) do(reqMethod string, reqPath string, reqBody io.Reader) (*http.Response, error) {
+	return ch.doWithParams(reqMethod, reqPath, nil, reqBody)
+}
+
+func (ch *helper) doWithParams(reqMethod string, reqPath string, reqParams url.Values, reqBody io.Reader) (*http.Response, error) {
+	reqPath = path.Join("/", reqPath)
+	reqTimestamp := time.Now()
+	canonicalRequest := fmt.Sprintf("%s %s %d", reqMethod, reqPath, reqTimestamp.Unix())
+	authSignature := ch.getSignature(canonicalRequest, ch.authSecret)
+
+	r, err := http.NewRequest(reqMethod, fmt.Sprintf("%s%s", ch.apiEndpoint, reqPath), reqBody)
 	if err != nil {
 		return nil, err
 	}
-	r.Header.Set("Authorization", fmt.Sprintf("Bearer %s", ch.auth))
+	r.URL.RawQuery = reqParams.Encode()
 	r.Header.Set("Content-Type", "application/json")
 	r.Header.Set("Accept", "application/json")
-	ch.l.V(4).Info("Calling API", "method", method, "url", r.URL.String())
-	return ch.c.Do(r)
+	r.Header.Set("Date", reqTimestamp.UTC().Format(time.RFC3339))
+	r.SetBasicAuth(ch.authKey, authSignature)
+	ch.l.V(4).Info("Calling API", "method", reqMethod, "URL", r.URL.String())
+
+	// Log the request
+	/* dumpReq, dumpErr := httputil.DumpRequestOut(r, true)
+	if dumpErr != nil {
+		return nil, dumpErr
+	}
+	ch.l.V(4).Info("doWithParams", "REQUEST", string(dumpReq)) */
+
+	resp, err := ch.c.Do(r)
+
+	// Log the response
+	/* dumpResp, dumpErr := httputil.DumpResponse(resp, true)
+	if dumpErr != nil {
+		return nil, dumpErr
+	}
+	ch.l.V(4).Info("doWithParams", "RESPONSE", string(dumpResp)) */
+
+	return resp, err
 }
 
 func apiErr(resp *http.Response, err error) ApiError {
