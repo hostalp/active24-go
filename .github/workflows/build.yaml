@@ -23,7 +23,7 @@ jobs:
         with:
           ref: ${{github.event.pull_request.head.sha}}
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
       - uses: pre-commit/action@v3.0.1
 
       - name: Build
