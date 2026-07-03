@@ -52,6 +52,8 @@ type ApiError interface {
 type Client interface {
 	// Dns provides interface to interact with DNS records
 	Dns() Dns
+	// Service provides interface to interact with services
+	Service() Service
 }
 
 func New(apiKey string, apiSecret string, opts ...Option) Client {
@@ -79,6 +81,12 @@ type client struct {
 
 func (c *client) Dns() Dns {
 	return &dns{
+		h: c.h,
+	}
+}
+
+func (c *client) Service() Service {
+	return &service{
 		h: c.h,
 	}
 }
