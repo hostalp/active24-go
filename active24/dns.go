@@ -27,6 +27,9 @@ import (
 	"strings"
 )
 
+// https://rest.active24.cz/v2/docs/intro
+// https://rest.active24.cz/v2/docs#/DNS
+
 type DnsRecordType string
 
 //goland:noinspection GoUnusedConst

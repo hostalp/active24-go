@@ -14,7 +14,7 @@
 
 module github.com/hostalp/active24-go
 
-go 1.25
+go 1.26
 
 require k8s.io/klog/v2 v2.130.1
 
